@@ -17,6 +17,9 @@ vous voulez en garder une trace ailleurs.
 
 ## Fonctionnalités
 
+L'application a trois vues, accessibles par les onglets en haut de page.
+
+### Tâches
 - **Ajouter une tâche** : nom, date prévue, durée prévue (heures/minutes).
 - **Démarrer / Terminer** : un clic enregistre automatiquement la date et
   l'heure réelles de début ou de fin ; la durée réelle s'affiche en direct
@@ -24,13 +27,36 @@ vous voulez en garder une trace ailleurs.
 - **Modifier** : corrigez manuellement le nom, la durée prévue, les
   dates/heures de début et fin, ou le statut (utile si vous avez oublié de
   cliquer sur Démarrer/Terminer).
-- **Écart** : la durée réelle est comparée à la durée prévue (en vert si
-  respectée, en rouge si dépassée), avec un total du jour dans le bandeau
-  du haut.
 - **Filtres** : Aujourd'hui / En cours-à faire / Toutes.
-- **Export** : bouton « Exporter en CSV » (télécharge un fichier) et
-  « Copier en CSV » (copie dans le presse-papiers) pour reprendre les
-  données dans un tableur.
+
+### Tableau de bord
+- **Indicateurs de productivité** sur une période (7 jours, 30 jours ou
+  tout l'historique) : taux de tâches terminées à l'heure, nombre de tâches
+  non exécutées, dépassement de temps cumulé, durée réelle vs prévue.
+- **Graphique prévu / réel par jour**, avec le dépassement mis en évidence
+  en rouge.
+- **Répartition** des tâches par statut de performance (à l'heure,
+  dépassement, non exécutées, en retard, en cours, à faire).
+- **À traiter** : liste des tâches non exécutées ou en cours en dépassement
+  de temps, pour agir directement dessus.
+
+### Historique
+- Recherche et filtre de toutes les tâches par période (du/au), par statut
+  et par nom.
+- Export CSV de la sélection filtrée.
+
+### Chaque tâche affiche un statut de performance
+- **Terminée à l'heure** / **Terminée en dépassement** (au-delà de 10 % du
+  temps prévu).
+- **Non exécutée** : tâche « à faire » dont la date prévue est passée sans
+  avoir été démarrée.
+- **En cours — en retard** : tâche en cours qui a déjà dépassé sa durée
+  prévue.
+
+### Export
+Boutons « Exporter en CSV » (télécharge un fichier) et « Copier en CSV »
+(copie dans le presse-papiers) disponibles dans les vues Tâches et
+Historique, pour reprendre les données dans un tableur.
 
 ## Notes techniques
 

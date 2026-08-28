@@ -161,8 +161,34 @@
     font-size:1.3rem;
     font-weight:500;
   }
-  .stat .value.pos{color:var(--bad);}
-  .stat .value.neg{color:var(--good);}
+  .stat .value.bad{color:var(--bad);}
+  .stat .value.good{color:var(--good);}
+
+  /* ---------- top-level navigation ---------- */
+  [hidden]{display:none !important;}
+  .seg{
+    display:inline-flex;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:3px;
+    gap:2px;
+    margin-bottom:22px;
+  }
+  .seg button{
+    background:transparent;
+    color:var(--ink-muted);
+    padding:7px 16px;
+    font-size:0.86rem;
+    border-radius:7px;
+    font-weight:600;
+  }
+  .seg button.active{
+    background:var(--surface);
+    color:var(--ink);
+    box-shadow:var(--shadow);
+  }
+  .seg button:hover:not(.active){color:var(--ink);}
 
   /* ---------- add-task panel ---------- */
   .panel{
@@ -270,18 +296,22 @@
     gap:14px;
     align-items:center;
   }
-  .task.is-running{border-color:var(--accent);}
+  .task[data-cat="good"]{border-color:var(--good);}
+  .task[data-cat="warn"]{border-color:var(--warn);}
+  .task[data-cat="bad"]{border-color:var(--bad);}
 
   .status-dot{
     width:10px; height:10px; border-radius:50%;
     background:var(--ink-faint);
     flex:0 0 auto;
   }
-  .task.is-running .status-dot{background:var(--warn); box-shadow:0 0 0 3px var(--warn-soft);}
-  .task.is-done .status-dot{background:var(--good);}
+  .task[data-cat="good"] .status-dot{background:var(--good);}
+  .task[data-cat="warn"] .status-dot{background:var(--warn); box-shadow:0 0 0 3px var(--warn-soft);}
+  .task[data-cat="bad"] .status-dot{background:var(--bad); box-shadow:0 0 0 3px var(--bad-soft);}
 
   .t-name{min-width:0;}
   .t-name .name{font-weight:600; font-size:0.96rem; word-break:break-word;}
+  .t-name .date-sub{font-size:0.72rem; color:var(--ink-faint); margin-left:6px;}
   .t-name .chip{
     display:inline-block;
     margin-top:4px;
@@ -294,8 +324,9 @@
     background:var(--surface-2);
     color:var(--ink-faint);
   }
-  .task.is-running .t-name .chip{background:var(--warn-soft); color:var(--warn);}
-  .task.is-done .t-name .chip{background:var(--good-soft); color:var(--good);}
+  .chip.c-good{background:var(--good-soft); color:var(--good);}
+  .chip.c-warn{background:var(--warn-soft); color:var(--warn);}
+  .chip.c-bad{background:var(--bad-soft); color:var(--bad);}
 
   .t-col{display:flex; flex-direction:column; gap:2px; min-width:0;}
   .t-col .label{font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-faint); font-weight:600;}
@@ -388,6 +419,43 @@
   .btn-ghost{background:var(--surface-2); color:var(--ink); padding:9px 16px; font-size:0.88rem;}
   .btn-ghost:hover{background:var(--border);}
 
+  /* ---------- dashboard ---------- */
+  .chart-card{padding:16px 18px 14px;}
+  .chart-legend{display:flex; gap:16px; flex-wrap:wrap; font-size:0.76rem; color:var(--ink-muted); margin-bottom:12px;}
+  .legend-item{display:inline-flex; align-items:center; gap:6px;}
+  .swatch{width:10px; height:10px; border-radius:2px; display:inline-block; flex:0 0 auto;}
+  .swatch-planned{background:var(--surface-2); border:1px solid var(--ink-faint);}
+  .swatch-good{background:var(--good);}
+  .swatch-bad{background:var(--bad);}
+  .chart-scroll{overflow-x:auto;}
+  #dash-chart-wrap svg{display:block; min-width:100%;}
+  #dash-chart-wrap text{font-family:'IBM Plex Mono', monospace; font-size:9px; fill:var(--ink-faint);}
+  #dash-chart-wrap .bar-planned{fill:var(--surface-2); stroke:var(--border); stroke-width:1;}
+  #dash-chart-wrap .bar-good{fill:var(--good);}
+  #dash-chart-wrap .bar-bad{fill:var(--bad);}
+  #dash-chart-wrap .grid-line{stroke:var(--border); stroke-width:1;}
+  .chart-note{font-size:0.74rem; color:var(--ink-faint); margin:10px 0 0;}
+
+  .breakdown{padding:14px 18px 18px; display:flex; flex-direction:column; gap:10px;}
+  .brk-row{display:grid; grid-template-columns:118px 1fr 40px; align-items:center; gap:10px;}
+  .brk-row .brk-label{font-size:0.82rem; color:var(--ink-muted);}
+  .brk-row .brk-track{height:8px; border-radius:6px; background:var(--surface-2); overflow:hidden;}
+  .brk-row .brk-fill{display:block; height:100%; border-radius:6px; transition:width 0.2s ease;}
+  .brk-row .brk-count{font-family:'IBM Plex Mono', monospace; font-variant-numeric:tabular-nums; font-size:0.82rem; text-align:right;}
+
+  .issues-body{padding:12px 14px 16px; display:flex; flex-direction:column; gap:8px;}
+
+  .empty-inline{font-size:0.85rem; color:var(--ink-faint); padding:4px 2px;}
+
+  /* ---------- history ---------- */
+  .hist-filters{
+    padding:14px 18px 18px;
+    display:grid;
+    grid-template-columns:1fr 1fr 1.3fr 1.6fr;
+    gap:12px;
+    align-items:end;
+  }
+
   @media (max-width: 720px){
     form#add-form{grid-template-columns:1fr 1fr; }
     form#add-form .field.name{grid-column:1 / -1;}
@@ -399,6 +467,9 @@
     }
     .task .status-dot{display:none;}
     .t-actions{justify-content:flex-start;}
+    .hist-filters{grid-template-columns:1fr 1fr;}
+    .hist-filters .field.search{grid-column:1 / -1;}
+    .brk-row{grid-template-columns:96px 1fr 34px;}
   }
 </style>
 
@@ -423,64 +494,164 @@
     </div>
   </header>
 
-  <div class="stats" id="stats">
-    <div class="stat">
-      <span class="label">Tâches aujourd'hui</span>
-      <span class="value" id="stat-count">0</span>
-    </div>
-    <div class="stat">
-      <span class="label">Durée prévue</span>
-      <span class="value" id="stat-planned">0 h 00</span>
-    </div>
-    <div class="stat">
-      <span class="label">Durée réelle</span>
-      <span class="value" id="stat-actual">0 h 00</span>
-    </div>
-    <div class="stat">
-      <span class="label">Écart</span>
-      <span class="value" id="stat-variance">0 h 00</span>
-    </div>
-  </div>
+  <nav class="seg" id="view-tabs">
+    <button data-view="tasks" class="active">Tâches</button>
+    <button data-view="dashboard">Tableau de bord</button>
+    <button data-view="history">Historique</button>
+  </nav>
 
-  <div class="panel">
-    <div class="panel-head">Nouvelle tâche</div>
-    <form id="add-form">
-      <div class="field name">
-        <label for="f-name">Tâche</label>
-        <input type="text" id="f-name" placeholder="Ex. Rédiger le rapport" required>
+  <section id="view-tasks" class="view">
+    <div class="stats" id="stats">
+      <div class="stat">
+        <span class="label">Tâches aujourd'hui</span>
+        <span class="value" id="stat-count">0</span>
       </div>
-      <div class="field">
-        <label for="f-date">Date prévue</label>
-        <input type="date" id="f-date" required>
+      <div class="stat">
+        <span class="label">Durée prévue</span>
+        <span class="value" id="stat-planned">0 h 00</span>
       </div>
-      <div class="field">
-        <label for="f-hours">Durée prévue (h)</label>
-        <input type="number" id="f-hours" min="0" max="23" step="1" value="0">
+      <div class="stat">
+        <span class="label">Durée réelle</span>
+        <span class="value" id="stat-actual">0 h 00</span>
       </div>
-      <div class="field">
-        <label for="f-min">Durée prévue (min)</label>
-        <input type="number" id="f-min" min="0" max="59" step="5" value="30">
+      <div class="stat">
+        <span class="label">Écart</span>
+        <span class="value" id="stat-variance">0 h 00</span>
       </div>
-      <button type="submit" class="btn-primary">Ajouter</button>
-    </form>
-  </div>
-
-  <div class="tabs" id="tabs">
-    <button data-filter="today" class="active">Aujourd'hui</button>
-    <button data-filter="open">En cours / à faire</button>
-    <button data-filter="all">Toutes</button>
-  </div>
-
-  <div class="list" id="list"></div>
-
-  <footer>
-    <span id="footer-note">Les données restent dans ce navigateur.</span>
-    <div class="links">
-      <button class="link" id="export-btn" type="button">Exporter en CSV</button>
-      <button class="link" id="copy-btn" type="button">Copier en CSV</button>
-      <button class="link" id="clear-done-btn" type="button">Effacer les tâches terminées</button>
     </div>
-  </footer>
+
+    <div class="panel">
+      <div class="panel-head">Nouvelle tâche</div>
+      <form id="add-form">
+        <div class="field name">
+          <label for="f-name">Tâche</label>
+          <input type="text" id="f-name" placeholder="Ex. Rédiger le rapport" required>
+        </div>
+        <div class="field">
+          <label for="f-date">Date prévue</label>
+          <input type="date" id="f-date" required>
+        </div>
+        <div class="field">
+          <label for="f-hours">Durée prévue (h)</label>
+          <input type="number" id="f-hours" min="0" max="23" step="1" value="0">
+        </div>
+        <div class="field">
+          <label for="f-min">Durée prévue (min)</label>
+          <input type="number" id="f-min" min="0" max="59" step="5" value="30">
+        </div>
+        <button type="submit" class="btn-primary">Ajouter</button>
+      </form>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button data-filter="today" class="active">Aujourd'hui</button>
+      <button data-filter="open">En cours / à faire</button>
+      <button data-filter="all">Toutes</button>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <footer>
+      <span id="footer-note">Les données restent dans ce navigateur.</span>
+      <div class="links">
+        <button class="link" id="export-btn" type="button">Exporter en CSV</button>
+        <button class="link" id="copy-btn" type="button">Copier en CSV</button>
+        <button class="link" id="clear-done-btn" type="button">Effacer les tâches terminées</button>
+      </div>
+    </footer>
+  </section>
+
+  <section id="view-dashboard" class="view" hidden>
+    <div class="tabs" id="dash-period-tabs">
+      <button data-period="7" class="active">7 jours</button>
+      <button data-period="30">30 jours</button>
+      <button data-period="all">Tout</button>
+    </div>
+
+    <div class="stats" id="dash-kpis">
+      <div class="stat">
+        <span class="label">Taux à l'heure</span>
+        <span class="value" id="kpi-ontime">—</span>
+      </div>
+      <div class="stat">
+        <span class="label">Non exécutées</span>
+        <span class="value" id="kpi-missed">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Dépassement cumulé</span>
+        <span class="value" id="kpi-overrun">0 h 00</span>
+      </div>
+      <div class="stat">
+        <span class="label">Réel / Prévu</span>
+        <span class="value" id="kpi-ratio">—</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Prévu / réel par jour</div>
+      <div class="chart-card">
+        <div class="chart-legend">
+          <span class="legend-item"><i class="swatch swatch-planned"></i>Prévu</span>
+          <span class="legend-item"><i class="swatch swatch-good"></i>Réel — dans les temps</span>
+          <span class="legend-item"><i class="swatch swatch-bad"></i>Réel — dépassement</span>
+        </div>
+        <div class="chart-scroll" id="dash-chart-wrap"></div>
+        <p class="chart-note" id="chart-note"></p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Répartition de la période</div>
+      <div class="breakdown" id="dash-breakdown"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">À traiter — non exécutées &amp; en retard</div>
+      <div class="issues-body" id="dash-issues"></div>
+    </div>
+  </section>
+
+  <section id="view-history" class="view" hidden>
+    <div class="panel">
+      <div class="panel-head">Filtrer l'historique</div>
+      <div class="hist-filters">
+        <div class="field">
+          <label for="h-from">Du</label>
+          <input type="date" id="h-from">
+        </div>
+        <div class="field">
+          <label for="h-to">Au</label>
+          <input type="date" id="h-to">
+        </div>
+        <div class="field">
+          <label for="h-status">Statut</label>
+          <select id="h-status">
+            <option value="all">Toutes</option>
+            <option value="on_time">Terminées à l'heure</option>
+            <option value="overrun">Terminées en dépassement</option>
+            <option value="missed">Non exécutées</option>
+            <option value="late_running">En cours — en retard</option>
+            <option value="in_progress">En cours</option>
+            <option value="upcoming">À faire</option>
+          </select>
+        </div>
+        <div class="field search">
+          <label for="h-search">Recherche</label>
+          <input type="text" id="h-search" placeholder="Nom de la tâche">
+        </div>
+      </div>
+    </div>
+
+    <div class="list" id="history-list"></div>
+
+    <footer>
+      <span id="history-count">0 tâche</span>
+      <div class="links">
+        <button class="link" id="history-export-btn" type="button">Exporter cette sélection en CSV</button>
+      </div>
+    </footer>
+  </section>
+
 </div>
 
 <!-- edit modal -->
@@ -549,6 +720,22 @@
   var tasks = [];
   var currentFilter = "today";
   var editingId = null;
+  var currentView = "tasks";
+  var dashPeriod = "7";
+  var OVERRUN_TOLERANCE = 1.1;
+
+  var CATEGORY_META = {
+    on_time:      { label: "Terminée à l'heure",      short: "À l'heure",   color: "good" },
+    overrun:      { label: "Terminée en dépassement", short: "Dépassement", color: "bad"  },
+    late_running: { label: "En cours — en retard",    short: "En retard",   color: "bad"  },
+    in_progress:  { label: "En cours",                short: "En cours",    color: "warn" },
+    missed:       { label: "Non exécutée",            short: "Non exécutée",color: "bad"  },
+    upcoming:     { label: "À faire",                 short: "À faire",     color: "muted"}
+  };
+
+  function colorVar(key){
+    return key === "good" ? "var(--good)" : key === "warn" ? "var(--warn)" : key === "bad" ? "var(--bad)" : "var(--ink-faint)";
+  }
 
   function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
@@ -604,11 +791,35 @@
     return s === "running" ? "En cours" : s === "done" ? "Terminée" : "À faire";
   }
 
+  function classifyTask(t){
+    var today = todayISO();
+    var planned = t.plannedMinutes || 0;
+    if (t.status === "done"){
+      var a = actualMinutes(t, true);
+      if (a != null && planned > 0 && a > planned * OVERRUN_TOLERANCE) return "overrun";
+      return "on_time";
+    }
+    if (t.status === "running"){
+      var a2 = actualMinutes(t, true);
+      if (planned > 0 && a2 != null && a2 > planned * OVERRUN_TOLERANCE) return "late_running";
+      return "in_progress";
+    }
+    if (t.plannedDate && t.plannedDate < today) return "missed";
+    return "upcoming";
+  }
+
   /* ---------- rendering ---------- */
 
-  function render(){
+  function refreshAll(){
+    save();
     renderStats();
-    renderList();
+    renderActiveView();
+  }
+
+  function renderActiveView(){
+    if (currentView === "dashboard") renderDashboard();
+    else if (currentView === "history") renderHistory();
+    else renderList();
   }
 
   function renderStats(){
@@ -667,26 +878,34 @@
     });
   }
 
-  function renderTask(t){
+  function renderTask(t, opts){
+    opts = opts || {};
     var el = document.createElement("div");
-    el.className = "task" + (t.status === "running" ? " is-running" : t.status === "done" ? " is-done" : "");
+    el.className = "task";
     el.dataset.id = t.id;
+
+    var cat = classifyTask(t);
+    var meta = CATEGORY_META[cat];
+    el.dataset.cat = meta.color;
 
     var actual = actualMinutes(t, true);
     var planned = t.plannedMinutes || 0;
-    var varClass = "muted";
-    if (actual != null && planned > 0){
-      varClass = actual <= planned ? "good" : "bad";
-    }
+    var varClass = meta.color === "good" ? "good" : (meta.color === "bad" ? "bad" : "muted");
 
     var startLabel = t.startDate ? (formatDateShort(t.startDate) + (t.startTime ? " · " + t.startTime : "")) : "—";
     var endLabel = t.status === "running" ? "en cours…" : (t.endDate ? (formatDateShort(t.endDate) + (t.endTime ? " · " + t.endTime : "")) : "—");
+
+    var dateSub = "";
+    if (opts.showDate){
+      var ref = t.plannedDate || t.startDate;
+      if (ref) dateSub = '<span class="date-sub">' + formatDateShort(ref) + '</span>';
+    }
 
     el.innerHTML =
       '<span class="status-dot"></span>' +
       '<div class="t-name">' +
         '<div class="name"></div>' +
-        '<span class="chip">' + statusLabel(t.status) + '</span>' +
+        '<span class="chip c-' + meta.color + '">' + meta.label + '</span>' + dateSub +
       '</div>' +
       '<div class="t-col"><span class="label">Prévu</span><span class="val">' + minutesToLabel(planned) + '</span></div>' +
       '<div class="t-col"><span class="label">Début → Fin</span><span class="val muted" style="font-size:0.78rem;">' + startLabel + ' → ' + endLabel + '</span></div>' +
@@ -738,7 +957,7 @@
       status: "todo",
       createdAt: Date.now()
     });
-    save(); render();
+    refreshAll();
   }
 
   function startTask(id){
@@ -748,7 +967,7 @@
     t.startDate = todayISO();
     t.startTime = nowTimeHM();
     t.endDate = null; t.endTime = null;
-    save(); render();
+    refreshAll();
   }
 
   function finishTask(id){
@@ -757,7 +976,7 @@
     t.status = "done";
     t.endDate = todayISO();
     t.endTime = nowTimeHM();
-    save(); render();
+    refreshAll();
   }
 
   function deleteTask(id){
@@ -765,7 +984,7 @@
     if (!t) return;
     if (!confirm('Supprimer la tâche « ' + t.name + ' » ?')) return;
     tasks = tasks.filter(function(x){ return x.id !== id; });
-    save(); render();
+    refreshAll();
   }
 
   function clearDone(){
@@ -773,7 +992,7 @@
     if (n === 0) return;
     if (!confirm("Effacer " + n + " tâche(s) terminée(s) ?")) return;
     tasks = tasks.filter(function(t){ return t.status !== "done"; });
-    save(); render();
+    refreshAll();
   }
 
   /* ---------- edit modal ---------- */
@@ -811,7 +1030,7 @@
     t.endTime = document.getElementById("m-end-time").value || null;
     t.status = document.getElementById("m-status").value;
     if (t.startDate) t.plannedDate = t.plannedDate || t.startDate;
-    save(); closeEdit(); render();
+    closeEdit(); refreshAll();
   }
 
   /* ---------- export ---------- */
@@ -821,9 +1040,10 @@
     window.claude.use("downloads").then(function(ns){ downloadsApi = ns; }).catch(function(){});
   }
 
-  function buildCSV(){
+  function buildCSV(list){
+    list = list || tasks;
     var rows = [["Tâche","Statut","Date prévue","Durée prévue (min)","Date début","Heure début","Date fin","Heure fin","Durée réelle (min)"]];
-    tasks.forEach(function(t){
+    list.forEach(function(t){
       var a = actualMinutes(t, true);
       rows.push([
         t.name, statusLabel(t.status), t.plannedDate || "", t.plannedMinutes || 0,
@@ -839,9 +1059,10 @@
     }).join("\n");
   }
 
-  function exportCSV(){
-    var csv = "﻿" + buildCSV();
-    var filename = "chronologe-" + todayISO() + ".csv";
+  function exportCSV(list, filenamePrefix){
+    filenamePrefix = filenamePrefix || "chronologe";
+    var csv = "﻿" + buildCSV(list);
+    var filename = filenamePrefix + "-" + todayISO() + ".csv";
 
     if (downloadsApi){
       downloadsApi.save({ filename: filename, data: csv }).catch(function(err){
@@ -862,8 +1083,8 @@
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
   }
 
-  function copyCSV(){
-    var csv = buildCSV();
+  function copyCSV(list){
+    var csv = buildCSV(list);
     var done = function(){ flashFooterNote("CSV copié dans le presse-papiers."); };
     var fail = function(){ flashFooterNote("Impossible de copier automatiquement."); };
     if (navigator.clipboard && navigator.clipboard.writeText){
@@ -880,6 +1101,223 @@
     var original = "Les données restent dans ce navigateur.";
     el.textContent = msg;
     footerNoteTimer = setTimeout(function(){ el.textContent = original; }, 3500);
+  }
+
+  /* ---------- dashboard ---------- */
+
+  function addDaysISO(iso, delta){
+    var d = new Date(iso + "T00:00:00");
+    d.setDate(d.getDate() + delta);
+    return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+  }
+
+  function dateRangeArray(startISO, endISO){
+    var res = [];
+    var cursor = startISO;
+    var guard = 0;
+    while (cursor <= endISO && guard < 400){
+      res.push(cursor);
+      cursor = addDaysISO(cursor, 1);
+      guard++;
+    }
+    return res;
+  }
+
+  function hoursLabelShort(mins){
+    mins = Math.round(mins);
+    if (mins <= 0) return "0";
+    var h = Math.floor(mins/60), m = mins%60;
+    return h > 0 ? (h + (m ? "h" + pad(m) : "h")) : m + "m";
+  }
+
+  function renderDashboard(){
+    var today = todayISO();
+    var chartDays = dashPeriod === "all" ? 30 : Math.min(parseInt(dashPeriod, 10), 30);
+    var chartStart = addDaysISO(today, -(chartDays - 1));
+    renderDashChart(dateRangeArray(chartStart, today));
+    document.getElementById("chart-note").textContent =
+      dashPeriod === "all" ? "Graphique limité aux 30 derniers jours (les indicateurs ci-dessus couvrent tout l'historique)." : "";
+
+    var kpiStart = dashPeriod === "all" ? null : addDaysISO(today, -(parseInt(dashPeriod, 10) - 1));
+    var inPeriod = tasks.filter(function(t){
+      var ref = t.plannedDate || t.startDate;
+      if (!ref || ref > today) return false;
+      if (kpiStart && ref < kpiStart) return false;
+      return true;
+    });
+
+    var cats = { on_time:0, overrun:0, late_running:0, in_progress:0, missed:0, upcoming:0 };
+    var plannedSum = 0, actualSum = 0, overrunMinutes = 0;
+    inPeriod.forEach(function(t){
+      var cat = classifyTask(t);
+      cats[cat] = (cats[cat] || 0) + 1;
+      plannedSum += (t.plannedMinutes || 0);
+      var a = actualMinutes(t, true);
+      if (a != null) actualSum += a;
+      if (cat === "overrun" || cat === "late_running"){
+        var over = a - (t.plannedMinutes || 0);
+        if (over > 0) overrunMinutes += over;
+      }
+    });
+
+    var resolved = cats.on_time + cats.overrun + cats.missed;
+    var ontimeRate = resolved > 0 ? Math.round((cats.on_time / resolved) * 100) : null;
+
+    var ontimeEl = document.getElementById("kpi-ontime");
+    ontimeEl.textContent = ontimeRate != null ? ontimeRate + "%" : "—";
+    ontimeEl.className = "value" + (ontimeRate == null ? "" : ontimeRate >= 80 ? " good" : ontimeRate < 50 ? " bad" : "");
+
+    var missedEl = document.getElementById("kpi-missed");
+    missedEl.textContent = cats.missed;
+    missedEl.className = "value" + (cats.missed > 0 ? " bad" : "");
+
+    var overrunEl = document.getElementById("kpi-overrun");
+    overrunEl.textContent = minutesToLabel(overrunMinutes);
+    overrunEl.className = "value" + (overrunMinutes > 0 ? " bad" : "");
+
+    document.getElementById("kpi-ratio").textContent =
+      plannedSum > 0 || actualSum > 0 ? (minutesToLabel(actualSum) + " / " + minutesToLabel(plannedSum)) : "—";
+
+    renderBreakdown(cats);
+    renderIssues();
+  }
+
+  function renderDashChart(datesArr){
+    var byDay = {};
+    datesArr.forEach(function(d){ byDay[d] = { planned:0, actual:0, haveActual:false }; });
+    tasks.forEach(function(t){
+      var ref = t.plannedDate || t.startDate;
+      if (!ref || !byDay.hasOwnProperty(ref)) return;
+      byDay[ref].planned += (t.plannedMinutes || 0);
+      var a = actualMinutes(t, true);
+      if (a != null){ byDay[ref].actual += a; byDay[ref].haveActual = true; }
+    });
+
+    var maxVal = 30;
+    datesArr.forEach(function(d){
+      maxVal = Math.max(maxVal, byDay[d].planned, byDay[d].actual);
+    });
+    maxVal = Math.ceil(maxVal / 30) * 30;
+
+    var n = datesArr.length;
+    var groupW = 34, barW = 10, gap = 3;
+    var chartH = 150, padTop = 10, padBottom = 24, padLeft = 34, padRight = 12;
+    var W = padLeft + padRight + n * groupW;
+    var H = padTop + chartH + padBottom;
+
+    var svg = [];
+    svg.push('<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Durée prévue et durée réelle par jour">');
+
+    [0, maxVal/2, maxVal].forEach(function(tv){
+      var y = padTop + chartH - (tv / maxVal) * chartH;
+      svg.push('<line class="grid-line" x1="' + padLeft + '" y1="' + y + '" x2="' + (W - padRight) + '" y2="' + y + '"/>');
+      svg.push('<text x="' + (padLeft - 6) + '" y="' + (y + 3) + '" text-anchor="end">' + hoursLabelShort(tv) + '</text>');
+    });
+
+    datesArr.forEach(function(d, i){
+      var gx = padLeft + i * groupW;
+      var day = byDay[d];
+      var pH = (day.planned / maxVal) * chartH;
+      var aH = day.haveActual ? (day.actual / maxVal) * chartH : 0;
+      var over = day.planned > 0 && day.actual > day.planned * OVERRUN_TOLERANCE;
+      var barClass = over ? "bar-bad" : "bar-good";
+
+      svg.push('<g>');
+      svg.push('<rect class="bar-planned" x="' + gx + '" y="' + (padTop + chartH - pH) + '" width="' + barW + '" height="' + Math.max(pH, 0) + '" rx="3"/>');
+      if (day.haveActual){
+        svg.push('<rect class="' + barClass + '" x="' + (gx + barW + gap) + '" y="' + (padTop + chartH - aH) + '" width="' + barW + '" height="' + Math.max(aH, 0) + '" rx="3"/>');
+      }
+      svg.push('<title>' + formatDateShort(d) + ' — Prévu ' + minutesToLabel(day.planned) + (day.haveActual ? ' · Réel ' + minutesToLabel(day.actual) : '') + '</title>');
+      svg.push('</g>');
+
+      if (n <= 10 || i % 5 === 0 || i === n - 1){
+        svg.push('<text x="' + (gx + barW) + '" y="' + (H - 6) + '" text-anchor="middle">' + formatDateShort(d) + '</text>');
+      }
+    });
+
+    svg.push('</svg>');
+    document.getElementById("dash-chart-wrap").innerHTML = svg.join("");
+  }
+
+  function renderBreakdown(cats){
+    var order = ["on_time", "overrun", "missed", "late_running", "in_progress", "upcoming"];
+    var maxCount = Math.max.apply(null, order.map(function(k){ return cats[k] || 0; }).concat([1]));
+    var total = order.reduce(function(sum, k){ return sum + (cats[k] || 0); }, 0);
+    var container = document.getElementById("dash-breakdown");
+    if (total === 0){
+      container.innerHTML = '<p class="empty-inline">Aucune tâche sur cette période.</p>';
+      return;
+    }
+    container.innerHTML = order.map(function(k){
+      var count = cats[k] || 0;
+      var meta = CATEGORY_META[k];
+      var pct = Math.round((count / maxCount) * 100);
+      return '<div class="brk-row">' +
+        '<span class="brk-label">' + meta.short + '</span>' +
+        '<span class="brk-track"><span class="brk-fill" style="width:' + pct + '%; background:' + colorVar(meta.color) + '"></span></span>' +
+        '<span class="brk-count">' + count + '</span>' +
+      '</div>';
+    }).join("");
+  }
+
+  function renderIssues(){
+    var issues = tasks.filter(function(t){
+      var cat = classifyTask(t);
+      return cat === "missed" || cat === "late_running";
+    });
+    issues.sort(function(a, b){
+      var ra = a.plannedDate || a.startDate || "";
+      var rb = b.plannedDate || b.startDate || "";
+      return ra < rb ? -1 : ra > rb ? 1 : 0;
+    });
+    var container = document.getElementById("dash-issues");
+    container.innerHTML = "";
+    if (issues.length === 0){
+      var empty = document.createElement("div");
+      empty.className = "empty-inline";
+      empty.textContent = "Aucun retard ni tâche non exécutée en attente. Continuez ainsi.";
+      container.appendChild(empty);
+      return;
+    }
+    issues.forEach(function(t){ container.appendChild(renderTask(t, { showDate: true })); });
+  }
+
+  /* ---------- history ---------- */
+
+  function historyFilteredTasks(){
+    var today = todayISO();
+    var from = document.getElementById("h-from").value;
+    var to = document.getElementById("h-to").value;
+    var statusFilter = document.getElementById("h-status").value;
+    var search = document.getElementById("h-search").value.trim().toLowerCase();
+    return tasks.filter(function(t){
+      var ref = t.plannedDate || t.startDate || "";
+      if (from && ref && ref < from) return false;
+      if (to && ref && ref > to) return false;
+      if (statusFilter !== "all" && classifyTask(t) !== statusFilter) return false;
+      if (search && t.name.toLowerCase().indexOf(search) === -1) return false;
+      return true;
+    }).sort(function(a, b){
+      var ra = a.plannedDate || a.startDate || "";
+      var rb = b.plannedDate || b.startDate || "";
+      if (ra !== rb) return ra < rb ? 1 : -1;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  }
+
+  function renderHistory(){
+    var list = historyFilteredTasks();
+    var container = document.getElementById("history-list");
+    container.innerHTML = "";
+    if (list.length === 0){
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "Aucune tâche ne correspond à ces filtres.";
+      container.appendChild(empty);
+    } else {
+      list.forEach(function(t){ container.appendChild(renderTask(t, { showDate: true })); });
+    }
+    document.getElementById("history-count").textContent = list.length + (list.length === 1 ? " tâche" : " tâches");
   }
 
   /* ---------- clock ---------- */
@@ -917,8 +1355,8 @@
     renderList();
   });
 
-  document.getElementById("export-btn").addEventListener("click", exportCSV);
-  document.getElementById("copy-btn").addEventListener("click", copyCSV);
+  document.getElementById("export-btn").addEventListener("click", function(){ exportCSV(); });
+  document.getElementById("copy-btn").addEventListener("click", function(){ copyCSV(); });
   document.getElementById("clear-done-btn").addEventListener("click", clearDone);
   document.getElementById("modal-close").addEventListener("click", closeEdit);
   document.getElementById("modal-cancel").addEventListener("click", closeEdit);
@@ -927,15 +1365,48 @@
     if (ev.target === ev.currentTarget) closeEdit();
   });
 
+  document.getElementById("view-tabs").addEventListener("click", function(ev){
+    var btn = ev.target.closest("button[data-view]");
+    if (!btn) return;
+    currentView = btn.dataset.view;
+    Array.prototype.forEach.call(document.querySelectorAll("#view-tabs button"), function(b){
+      b.classList.toggle("active", b === btn);
+    });
+    document.getElementById("view-tasks").hidden = currentView !== "tasks";
+    document.getElementById("view-dashboard").hidden = currentView !== "dashboard";
+    document.getElementById("view-history").hidden = currentView !== "history";
+    renderActiveView();
+  });
+
+  document.getElementById("dash-period-tabs").addEventListener("click", function(ev){
+    var btn = ev.target.closest("button[data-period]");
+    if (!btn) return;
+    dashPeriod = btn.dataset.period;
+    Array.prototype.forEach.call(document.querySelectorAll("#dash-period-tabs button"), function(b){
+      b.classList.toggle("active", b === btn);
+    });
+    renderDashboard();
+  });
+
+  ["h-from", "h-to", "h-status"].forEach(function(id){
+    document.getElementById(id).addEventListener("change", renderHistory);
+  });
+  document.getElementById("h-search").addEventListener("input", renderHistory);
+  document.getElementById("history-export-btn").addEventListener("click", function(){
+    exportCSV(historyFilteredTasks(), "chronologe-historique");
+  });
+
   document.getElementById("f-date").value = todayISO();
 
   load();
-  render();
+  renderStats();
+  renderActiveView();
   tickClock();
   setInterval(function(){
     tickClock();
     if (tasks.some(function(t){ return t.status === "running"; })){
-      render();
+      renderStats();
+      renderActiveView();
     }
   }, 1000);
 
