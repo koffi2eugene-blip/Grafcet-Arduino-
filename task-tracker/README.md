@@ -6,14 +6,25 @@ effectuée, date/heure de début et date/heure de fin.
 
 ## Utilisation
 
-Ouvrez simplement `index.html` dans un navigateur (double-clic, ou
-`file:///.../task-tracker/index.html`). Vous pouvez aussi héberger ce
-fichier statique où vous voulez (GitHub Pages, serveur local, etc.).
+**Pour la synchronisation entre appareils (recommandé) :** ouvrez le lien de
+l'artefact Claude (celui que Claude vous a partagé) sur chaque appareil —
+téléphone, ordinateur, etc. La page se sauvegarde alors elle-même à chaque
+modification, et tout appareil qui ouvre ce **même lien** voit les mêmes
+tâches. Un badge en haut de page indique l'état : « Synchronisé sur tous vos
+appareils » (vert) ou « Enregistré uniquement sur cet appareil » (gris).
 
-Aucune installation, aucun compte : les données sont stockées dans le
-`localStorage` du navigateur utilisé. Elles restent donc locales à cet
-appareil et à ce navigateur — pensez à exporter en CSV régulièrement si
-vous voulez en garder une trace ailleurs.
+**En local, sans synchronisation :** vous pouvez aussi ouvrir `index.html`
+directement dans un navigateur (double-clic, ou
+`file:///.../task-tracker/index.html`), ou héberger ce fichier statique où
+vous voulez (GitHub Pages, serveur local, etc.). Dans ce cas il n'y a pas de
+lien commun entre appareils : les données restent dans le `localStorage` du
+navigateur utilisé, propre à cet appareil. Pensez à exporter en CSV
+régulièrement si vous voulez en garder une trace ailleurs.
+
+> Si vous ouvrez l'app sur un appareil qui avait déjà des tâches enregistrées
+> localement avant d'activer la synchronisation, elles sont automatiquement
+> fusionnées avec les tâches déjà synchronisées au premier chargement — rien
+> n'est perdu.
 
 ## Fonctionnalités
 
@@ -60,9 +71,23 @@ Historique, pour reprendre les données dans un tableur.
 
 ## Notes techniques
 
-Fichier unique HTML/CSS/JS, sans build ni dépendance externe (hormis les
+Fichier HTML/CSS/JS unique, sans dépendance externe au runtime (hormis les
 polices Google Fonts chargées via CDN). Compatible avec tout navigateur
-récent. Le code détecte l'environnement d'exécution : dans un artefact
-Claude, l'export utilise l'API de téléchargement de la plateforme ; en
-usage autonome (fichier ouvert directement), il utilise le téléchargement
-classique du navigateur.
+récent. Le code détecte l'environnement d'exécution :
+- Dans un artefact Claude (avec les capacités `artifact` et `downloads`
+  déclarées) : chaque modification republie une nouvelle version complète de
+  la page avec les données à jour, et toute autre vue ouverte sur le même
+  lien se recharge automatiquement — c'est ce qui assure la synchronisation.
+  L'export CSV utilise l'API de téléchargement de la plateforme.
+- En usage autonome (fichier ouvert directement, ou hébergé ailleurs) :
+  repli sur `localStorage` (un seul appareil) et téléchargement classique du
+  navigateur pour l'export.
+
+`index.html` contient sa propre logique de republication : la fonction
+`boot()` se sérialise elle-même (`boot.toString()`) pour former le script de
+la nouvelle version, et deux constantes (`HEAD_EXTRA_TEMPLATE`,
+`BODY_SKELETON_TEMPLATE`) portent une copie du `<head>`/CSS et du squelette
+HTML statique. **Si vous modifiez le CSS ou le HTML statique (hors des
+conteneurs remplis dynamiquement par JS), relancez `node build.js`** pour
+régénérer ces deux constantes à partir du fichier — sinon la version
+republiée par l'app resterait sur l'ancienne mise en page.

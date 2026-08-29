@@ -111,6 +111,22 @@
     color:var(--ink-muted);
     margin:0;
   }
+  .sync-badge{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:0.74rem;
+    color:var(--ink-faint);
+    margin:6px 0 0;
+  }
+  .sync-dot{width:7px; height:7px; border-radius:50%; background:var(--ink-faint); flex:0 0 auto;}
+  .sync-badge.synced{color:var(--good);}
+  .sync-badge.synced .sync-dot{background:var(--good);}
+  .sync-badge.local{color:var(--ink-faint);}
+  .sync-badge.pending{color:var(--warn);}
+  .sync-badge.pending .sync-dot{background:var(--warn);}
+  .sync-badge.error{color:var(--bad);}
+  .sync-badge.error .sync-dot{background:var(--bad);}
   .clock{
     font-family:'IBM Plex Mono', monospace;
     font-variant-numeric:tabular-nums;
@@ -487,6 +503,7 @@
         <h1>Chronologe</h1>
       </div>
       <p class="tagline">Prévu contre réalisé — pour vos journées de travail.</p>
+      <p class="sync-badge" id="sync-badge"><span class="sync-dot"></span><span id="sync-badge-text">—</span></p>
     </div>
     <div class="clock">
       <span id="clock-time">--:--:--</span>
@@ -552,7 +569,7 @@
     <div class="list" id="list"></div>
 
     <footer>
-      <span id="footer-note">Les données restent dans ce navigateur.</span>
+      <span id="footer-note">Astuce : exportez en CSV pour garder une copie hors ligne.</span>
       <div class="links">
         <button class="link" id="export-btn" type="button">Exporter en CSV</button>
         <button class="link" id="copy-btn" type="button">Copier en CSV</button>
@@ -712,17 +729,23 @@
   </div>
 </div>
 
+<script id="chronologe-state" type="application/json">{}</script>
+
 <script>
-(function(){
+function boot(){
   "use strict";
 
-  var STORAGE_KEY = "chronologe.tasks.v1";
+  var STORAGE_KEY = "chronologe.state.v2";
+  var LEGACY_STORAGE_KEY = "chronologe.tasks.v1";
+  var STATE_EL_ID = "chronologe-state";
   var tasks = [];
   var currentFilter = "today";
   var editingId = null;
   var currentView = "tasks";
   var dashPeriod = "7";
   var OVERRUN_TOLERANCE = 1.1;
+  var syncApi = null;
+  var syncAvailable = null; // null = unknown yet, true/false once resolved
 
   var CATEGORY_META = {
     on_time:      { label: "Terminée à l'heure",      short: "À l'heure",   color: "good" },
@@ -749,14 +772,89 @@
     return pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
 
-  function load(){
+  function readLocalState(){
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
-      tasks = raw ? JSON.parse(raw) : [];
-    }catch(e){ tasks = []; }
+      if (raw) return JSON.parse(raw);
+    }catch(e){}
+    // Migration depuis l'ancien format (tableau de tâches seul, sans capacité de synchronisation).
+    try{
+      var legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy){
+        var legacyTasks = JSON.parse(legacy);
+        if (Array.isArray(legacyTasks)) return { tasks: legacyTasks };
+      }
+    }catch(e){}
+    return null;
   }
+
+  function readEmbeddedState(){
+    try{
+      var el = document.getElementById(STATE_EL_ID);
+      if (!el) return null;
+      var text = (el.textContent || "").trim();
+      if (!text) return null;
+      var parsed = JSON.parse(text);
+      if (parsed && Array.isArray(parsed.tasks)) return parsed;
+      return null;
+    }catch(e){ return null; }
+  }
+
+  function mergeTasksById(base, extra){
+    var seen = {};
+    base.forEach(function(t){ seen[t.id] = true; });
+    var merged = base.slice();
+    extra.forEach(function(t){
+      if (!seen[t.id]){ merged.push(t); seen[t.id] = true; }
+    });
+    return merged;
+  }
+
+  function load(){
+    var embedded = readEmbeddedState();
+    var local = readLocalState();
+
+    if (embedded && local && Array.isArray(local.tasks) && local.tasks.length){
+      // Un état partagé existe déjà, mais cet appareil a aussi des tâches locales
+      // non encore synchronisées (ex. saisies avant l'activation de la synchronisation) : on les fusionne.
+      tasks = mergeTasksById(embedded.tasks, local.tasks);
+    } else if (embedded){
+      tasks = embedded.tasks;
+    } else if (local){
+      tasks = local.tasks || [];
+    } else {
+      tasks = [];
+    }
+
+    var restore = embedded || local;
+    if (restore){
+      if (restore.currentView) currentView = restore.currentView;
+      if (restore.dashPeriod) dashPeriod = restore.dashPeriod;
+      if (restore.currentFilter) currentFilter = restore.currentFilter;
+    }
+  }
+
+  function applyRestoredView(){
+    document.getElementById("view-tasks").hidden = currentView !== "tasks";
+    document.getElementById("view-dashboard").hidden = currentView !== "dashboard";
+    document.getElementById("view-history").hidden = currentView !== "history";
+    Array.prototype.forEach.call(document.querySelectorAll("#view-tabs button"), function(b){
+      b.classList.toggle("active", b.dataset.view === currentView);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){
+      b.classList.toggle("active", b.dataset.filter === currentFilter);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#dash-period-tabs button"), function(b){
+      b.classList.toggle("active", b.dataset.period === dashPeriod);
+    });
+  }
+
+  function currentStateSnapshot(){
+    return { tasks: tasks, currentView: currentView, dashPeriod: dashPeriod, currentFilter: currentFilter };
+  }
+
   function save(){
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }catch(e){}
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(currentStateSnapshot())); }catch(e){}
   }
 
   function minutesToLabel(mins){
@@ -812,6 +910,7 @@
 
   function refreshAll(){
     save();
+    syncPublish();
     renderStats();
     renderActiveView();
   }
@@ -1033,6 +1132,824 @@
     closeEdit(); refreshAll();
   }
 
+  /* ---------- multi-device sync (artifact capability) ---------- */
+
+  // Ces deux constantes sont générées automatiquement à partir du HTML de cette
+  // page par un script de build (voir task-tracker/build.js) : elles permettent
+  // à l'application de se republier elle-même avec les données à jour, pour que
+  // toute autre vue ouverte sur la même URL se synchronise automatiquement.
+  var HEAD_EXTRA_TEMPLATE = `<title>Chronologe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --bg: #eef1ef;
+    --surface: #ffffff;
+    --surface-2: #e2e8e5;
+    --border: #cdd6d1;
+    --ink: #16211d;
+    --ink-muted: #55655d;
+    --ink-faint: #7c8b83;
+    --accent: #1f6f66;
+    --accent-ink: #ffffff;
+    --accent-soft: #dcece8;
+    --good: #2f8f5b;
+    --good-soft: #e2f2e8;
+    --warn: #b5791f;
+    --warn-soft: #f5ead4;
+    --bad: #c0392b;
+    --bad-soft: #f7e2df;
+    --shadow: 0 1px 2px rgba(22,33,29,0.06), 0 8px 24px -12px rgba(22,33,29,0.18);
+    --radius: 10px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg: #101512;
+      --surface: #1a211d;
+      --surface-2: #212a25;
+      --border: #313d36;
+      --ink: #edf2ef;
+      --ink-muted: #9db0a5;
+      --ink-faint: #718077;
+      --accent: #55b3a4;
+      --accent-ink: #0b1613;
+      --accent-soft: #1e2f2b;
+      --good: #52b57e;
+      --good-soft: #1c2e23;
+      --warn: #d9a24e;
+      --warn-soft: #332818;
+      --bad: #e0685a;
+      --bad-soft: #3a211e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 8px 24px -12px rgba(0,0,0,0.5);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg: #101512;
+    --surface: #1a211d;
+    --surface-2: #212a25;
+    --border: #313d36;
+    --ink: #edf2ef;
+    --ink-muted: #9db0a5;
+    --ink-faint: #718077;
+    --accent: #55b3a4;
+    --accent-ink: #0b1613;
+    --accent-soft: #1e2f2b;
+    --good: #52b57e;
+    --good-soft: #1c2e23;
+    --warn: #d9a24e;
+    --warn-soft: #332818;
+    --bad: #e0685a;
+    --bad-soft: #3a211e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 8px 24px -12px rgba(0,0,0,0.5);
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Public Sans', system-ui, sans-serif;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+
+  .wrap{
+    max-width:920px;
+    margin:0 auto;
+    padding:28px 20px 80px;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:16px;
+    margin-bottom:22px;
+    flex-wrap:wrap;
+  }
+  .brand{display:flex; flex-direction:column; gap:2px;}
+  .brand-mark{
+    display:flex; align-items:center; gap:10px;
+  }
+  .brand-mark svg{flex:0 0 auto;}
+  h1{
+    font-family:'Zilla Slab', Georgia, serif;
+    font-weight:700;
+    font-size:1.65rem;
+    margin:0;
+    letter-spacing:0.2px;
+    text-wrap:balance;
+  }
+  .tagline{
+    font-size:0.83rem;
+    color:var(--ink-muted);
+    margin:0;
+  }
+  .sync-badge{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:0.74rem;
+    color:var(--ink-faint);
+    margin:6px 0 0;
+  }
+  .sync-dot{width:7px; height:7px; border-radius:50%; background:var(--ink-faint); flex:0 0 auto;}
+  .sync-badge.synced{color:var(--good);}
+  .sync-badge.synced .sync-dot{background:var(--good);}
+  .sync-badge.local{color:var(--ink-faint);}
+  .sync-badge.pending{color:var(--warn);}
+  .sync-badge.pending .sync-dot{background:var(--warn);}
+  .sync-badge.error{color:var(--bad);}
+  .sync-badge.error .sync-dot{background:var(--bad);}
+  .clock{
+    font-family:'IBM Plex Mono', monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:1.55rem;
+    font-weight:500;
+    color:var(--accent);
+    text-align:right;
+    line-height:1.1;
+  }
+  .clock .date{
+    display:block;
+    font-family:'Public Sans', sans-serif;
+    font-size:0.75rem;
+    color:var(--ink-faint);
+    text-transform:capitalize;
+    margin-top:2px;
+  }
+
+  /* ---------- stat strip ---------- */
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin-bottom:24px;
+    box-shadow:var(--shadow);
+  }
+  .stat{
+    background:var(--surface);
+    padding:14px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .stat .label{
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--ink-faint);
+    font-weight:600;
+  }
+  .stat .value{
+    font-family:'IBM Plex Mono', monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:1.3rem;
+    font-weight:500;
+  }
+  .stat .value.bad{color:var(--bad);}
+  .stat .value.good{color:var(--good);}
+
+  /* ---------- top-level navigation ---------- */
+  [hidden]{display:none !important;}
+  .seg{
+    display:inline-flex;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:3px;
+    gap:2px;
+    margin-bottom:22px;
+  }
+  .seg button{
+    background:transparent;
+    color:var(--ink-muted);
+    padding:7px 16px;
+    font-size:0.86rem;
+    border-radius:7px;
+    font-weight:600;
+  }
+  .seg button.active{
+    background:var(--surface);
+    color:var(--ink);
+    box-shadow:var(--shadow);
+  }
+  .seg button:hover:not(.active){color:var(--ink);}
+
+  /* ---------- add-task panel ---------- */
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    margin-bottom:22px;
+  }
+  .panel-head{
+    padding:14px 18px;
+    font-family:'Zilla Slab', serif;
+    font-weight:600;
+    font-size:1.02rem;
+    border-bottom:1px solid var(--border);
+  }
+  form#add-form{
+    padding:16px 18px 18px;
+    display:grid;
+    grid-template-columns:2.2fr 1fr 1fr 1fr auto;
+    gap:12px;
+    align-items:end;
+  }
+  .field{display:flex; flex-direction:column; gap:5px; min-width:0;}
+  .field label{
+    font-size:0.72rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--ink-faint);
+    font-weight:600;
+  }
+  input, select{
+    font-family:'Public Sans', sans-serif;
+    font-size:0.92rem;
+    color:var(--ink);
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:8px 10px;
+    width:100%;
+  }
+  input:focus, select:focus, button:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:1px;
+  }
+  input[type="number"]{font-family:'IBM Plex Mono', monospace;}
+
+  button{
+    font-family:'Public Sans', sans-serif;
+    cursor:pointer;
+    border:none;
+    border-radius:7px;
+    font-weight:600;
+  }
+  .btn-primary{
+    background:var(--accent);
+    color:var(--accent-ink);
+    padding:9px 18px;
+    font-size:0.9rem;
+    white-space:nowrap;
+  }
+  .btn-primary:hover{filter:brightness(1.06);}
+
+  /* ---------- filter tabs ---------- */
+  .tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:12px;
+  }
+  .tabs button{
+    background:transparent;
+    color:var(--ink-muted);
+    padding:6px 13px;
+    font-size:0.83rem;
+    border-radius:20px;
+    border:1px solid transparent;
+  }
+  .tabs button.active{
+    background:var(--accent-soft);
+    color:var(--accent);
+    border-color:var(--accent);
+  }
+  .tabs button:hover:not(.active){background:var(--surface-2);}
+
+  /* ---------- task list ---------- */
+  .list{display:flex; flex-direction:column; gap:8px;}
+  .empty{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--ink-faint);
+    background:var(--surface);
+    border:1px dashed var(--border);
+    border-radius:var(--radius);
+    font-size:0.9rem;
+  }
+
+  .task{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:12px 16px;
+    display:grid;
+    grid-template-columns:auto 1.7fr 1fr 1fr 1fr auto;
+    gap:14px;
+    align-items:center;
+  }
+  .task[data-cat="good"]{border-color:var(--good);}
+  .task[data-cat="warn"]{border-color:var(--warn);}
+  .task[data-cat="bad"]{border-color:var(--bad);}
+
+  .status-dot{
+    width:10px; height:10px; border-radius:50%;
+    background:var(--ink-faint);
+    flex:0 0 auto;
+  }
+  .task[data-cat="good"] .status-dot{background:var(--good);}
+  .task[data-cat="warn"] .status-dot{background:var(--warn); box-shadow:0 0 0 3px var(--warn-soft);}
+  .task[data-cat="bad"] .status-dot{background:var(--bad); box-shadow:0 0 0 3px var(--bad-soft);}
+
+  .t-name{min-width:0;}
+  .t-name .name{font-weight:600; font-size:0.96rem; word-break:break-word;}
+  .t-name .date-sub{font-size:0.72rem; color:var(--ink-faint); margin-left:6px;}
+  .t-name .chip{
+    display:inline-block;
+    margin-top:4px;
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:20px;
+    background:var(--surface-2);
+    color:var(--ink-faint);
+  }
+  .chip.c-good{background:var(--good-soft); color:var(--good);}
+  .chip.c-warn{background:var(--warn-soft); color:var(--warn);}
+  .chip.c-bad{background:var(--bad-soft); color:var(--bad);}
+
+  .t-col{display:flex; flex-direction:column; gap:2px; min-width:0;}
+  .t-col .label{font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-faint); font-weight:600;}
+  .t-col .val{font-family:'IBM Plex Mono', monospace; font-variant-numeric:tabular-nums; font-size:0.88rem;}
+  .t-col .val.muted{color:var(--ink-faint);}
+  .t-col .val.good{color:var(--good);}
+  .t-col .val.bad{color:var(--bad);}
+
+  .t-actions{display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;}
+  .icon-btn{
+    background:var(--surface-2);
+    color:var(--ink);
+    border:1px solid var(--border);
+    padding:6px 10px;
+    font-size:0.8rem;
+    border-radius:7px;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+  }
+  .icon-btn:hover{background:var(--accent-soft); color:var(--accent); border-color:var(--accent);}
+  .icon-btn.danger:hover{background:var(--bad-soft); color:var(--bad); border-color:var(--bad);}
+  .icon-btn.start{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  .icon-btn.start:hover{filter:brightness(1.08);}
+
+  footer{
+    margin-top:26px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    font-size:0.8rem;
+    color:var(--ink-faint);
+  }
+  footer .links{display:flex; gap:14px;}
+  footer button.link{
+    background:none;
+    color:var(--ink-muted);
+    font-size:0.8rem;
+    text-decoration:underline;
+    padding:0;
+    font-weight:500;
+  }
+  footer button.link:hover{color:var(--accent);}
+
+  /* ---------- modal ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0;
+    background:rgba(10,15,13,0.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:var(--surface);
+    border-radius:12px;
+    box-shadow:var(--shadow);
+    width:100%;
+    max-width:480px;
+    max-height:90vh;
+    overflow:auto;
+    border:1px solid var(--border);
+  }
+  .modal-head{
+    padding:16px 20px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .modal-head h2{
+    font-family:'Zilla Slab', serif;
+    font-size:1.1rem;
+    margin:0;
+    font-weight:600;
+  }
+  .modal-head button{background:none; color:var(--ink-faint); font-size:1.1rem; padding:2px 6px;}
+  .modal-body{padding:18px 20px; display:flex; flex-direction:column; gap:14px;}
+  .modal-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .modal-foot{
+    padding:14px 20px 18px;
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+  }
+  .btn-ghost{background:var(--surface-2); color:var(--ink); padding:9px 16px; font-size:0.88rem;}
+  .btn-ghost:hover{background:var(--border);}
+
+  /* ---------- dashboard ---------- */
+  .chart-card{padding:16px 18px 14px;}
+  .chart-legend{display:flex; gap:16px; flex-wrap:wrap; font-size:0.76rem; color:var(--ink-muted); margin-bottom:12px;}
+  .legend-item{display:inline-flex; align-items:center; gap:6px;}
+  .swatch{width:10px; height:10px; border-radius:2px; display:inline-block; flex:0 0 auto;}
+  .swatch-planned{background:var(--surface-2); border:1px solid var(--ink-faint);}
+  .swatch-good{background:var(--good);}
+  .swatch-bad{background:var(--bad);}
+  .chart-scroll{overflow-x:auto;}
+  #dash-chart-wrap svg{display:block; min-width:100%;}
+  #dash-chart-wrap text{font-family:'IBM Plex Mono', monospace; font-size:9px; fill:var(--ink-faint);}
+  #dash-chart-wrap .bar-planned{fill:var(--surface-2); stroke:var(--border); stroke-width:1;}
+  #dash-chart-wrap .bar-good{fill:var(--good);}
+  #dash-chart-wrap .bar-bad{fill:var(--bad);}
+  #dash-chart-wrap .grid-line{stroke:var(--border); stroke-width:1;}
+  .chart-note{font-size:0.74rem; color:var(--ink-faint); margin:10px 0 0;}
+
+  .breakdown{padding:14px 18px 18px; display:flex; flex-direction:column; gap:10px;}
+  .brk-row{display:grid; grid-template-columns:118px 1fr 40px; align-items:center; gap:10px;}
+  .brk-row .brk-label{font-size:0.82rem; color:var(--ink-muted);}
+  .brk-row .brk-track{height:8px; border-radius:6px; background:var(--surface-2); overflow:hidden;}
+  .brk-row .brk-fill{display:block; height:100%; border-radius:6px; transition:width 0.2s ease;}
+  .brk-row .brk-count{font-family:'IBM Plex Mono', monospace; font-variant-numeric:tabular-nums; font-size:0.82rem; text-align:right;}
+
+  .issues-body{padding:12px 14px 16px; display:flex; flex-direction:column; gap:8px;}
+
+  .empty-inline{font-size:0.85rem; color:var(--ink-faint); padding:4px 2px;}
+
+  /* ---------- history ---------- */
+  .hist-filters{
+    padding:14px 18px 18px;
+    display:grid;
+    grid-template-columns:1fr 1fr 1.3fr 1.6fr;
+    gap:12px;
+    align-items:end;
+  }
+
+  @media (max-width: 720px){
+    form#add-form{grid-template-columns:1fr 1fr; }
+    form#add-form .field.name{grid-column:1 / -1;}
+    form#add-form button{grid-column:1 / -1;}
+    .stats{grid-template-columns:repeat(2, 1fr);}
+    .task{
+      grid-template-columns:1fr;
+      row-gap:8px;
+    }
+    .task .status-dot{display:none;}
+    .t-actions{justify-content:flex-start;}
+    .hist-filters{grid-template-columns:1fr 1fr;}
+    .hist-filters .field.search{grid-column:1 / -1;}
+    .brk-row{grid-template-columns:96px 1fr 34px;}
+  }
+</style>`;
+  var BODY_SKELETON_TEMPLATE = `<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+          <circle cx="15" cy="16" r="11" stroke="var(--accent)" stroke-width="2.2"/>
+          <path d="M15 9V16L20 19" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 3H18" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M15 3V5.5" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <h1>Chronologe</h1>
+      </div>
+      <p class="tagline">Prévu contre réalisé — pour vos journées de travail.</p>
+      <p class="sync-badge" id="sync-badge"><span class="sync-dot"></span><span id="sync-badge-text">—</span></p>
+    </div>
+    <div class="clock">
+      <span id="clock-time">--:--:--</span>
+      <span class="date" id="clock-date">—</span>
+    </div>
+  </header>
+
+  <nav class="seg" id="view-tabs">
+    <button data-view="tasks" class="active">Tâches</button>
+    <button data-view="dashboard">Tableau de bord</button>
+    <button data-view="history">Historique</button>
+  </nav>
+
+  <section id="view-tasks" class="view">
+    <div class="stats" id="stats">
+      <div class="stat">
+        <span class="label">Tâches aujourd'hui</span>
+        <span class="value" id="stat-count">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Durée prévue</span>
+        <span class="value" id="stat-planned">0 h 00</span>
+      </div>
+      <div class="stat">
+        <span class="label">Durée réelle</span>
+        <span class="value" id="stat-actual">0 h 00</span>
+      </div>
+      <div class="stat">
+        <span class="label">Écart</span>
+        <span class="value" id="stat-variance">0 h 00</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Nouvelle tâche</div>
+      <form id="add-form">
+        <div class="field name">
+          <label for="f-name">Tâche</label>
+          <input type="text" id="f-name" placeholder="Ex. Rédiger le rapport" required>
+        </div>
+        <div class="field">
+          <label for="f-date">Date prévue</label>
+          <input type="date" id="f-date" required>
+        </div>
+        <div class="field">
+          <label for="f-hours">Durée prévue (h)</label>
+          <input type="number" id="f-hours" min="0" max="23" step="1" value="0">
+        </div>
+        <div class="field">
+          <label for="f-min">Durée prévue (min)</label>
+          <input type="number" id="f-min" min="0" max="59" step="5" value="30">
+        </div>
+        <button type="submit" class="btn-primary">Ajouter</button>
+      </form>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button data-filter="today" class="active">Aujourd'hui</button>
+      <button data-filter="open">En cours / à faire</button>
+      <button data-filter="all">Toutes</button>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <footer>
+      <span id="footer-note">Astuce : exportez en CSV pour garder une copie hors ligne.</span>
+      <div class="links">
+        <button class="link" id="export-btn" type="button">Exporter en CSV</button>
+        <button class="link" id="copy-btn" type="button">Copier en CSV</button>
+        <button class="link" id="clear-done-btn" type="button">Effacer les tâches terminées</button>
+      </div>
+    </footer>
+  </section>
+
+  <section id="view-dashboard" class="view" hidden>
+    <div class="tabs" id="dash-period-tabs">
+      <button data-period="7" class="active">7 jours</button>
+      <button data-period="30">30 jours</button>
+      <button data-period="all">Tout</button>
+    </div>
+
+    <div class="stats" id="dash-kpis">
+      <div class="stat">
+        <span class="label">Taux à l'heure</span>
+        <span class="value" id="kpi-ontime">—</span>
+      </div>
+      <div class="stat">
+        <span class="label">Non exécutées</span>
+        <span class="value" id="kpi-missed">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Dépassement cumulé</span>
+        <span class="value" id="kpi-overrun">0 h 00</span>
+      </div>
+      <div class="stat">
+        <span class="label">Réel / Prévu</span>
+        <span class="value" id="kpi-ratio">—</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Prévu / réel par jour</div>
+      <div class="chart-card">
+        <div class="chart-legend">
+          <span class="legend-item"><i class="swatch swatch-planned"></i>Prévu</span>
+          <span class="legend-item"><i class="swatch swatch-good"></i>Réel — dans les temps</span>
+          <span class="legend-item"><i class="swatch swatch-bad"></i>Réel — dépassement</span>
+        </div>
+        <div class="chart-scroll" id="dash-chart-wrap"></div>
+        <p class="chart-note" id="chart-note"></p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Répartition de la période</div>
+      <div class="breakdown" id="dash-breakdown"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">À traiter — non exécutées &amp; en retard</div>
+      <div class="issues-body" id="dash-issues"></div>
+    </div>
+  </section>
+
+  <section id="view-history" class="view" hidden>
+    <div class="panel">
+      <div class="panel-head">Filtrer l'historique</div>
+      <div class="hist-filters">
+        <div class="field">
+          <label for="h-from">Du</label>
+          <input type="date" id="h-from">
+        </div>
+        <div class="field">
+          <label for="h-to">Au</label>
+          <input type="date" id="h-to">
+        </div>
+        <div class="field">
+          <label for="h-status">Statut</label>
+          <select id="h-status">
+            <option value="all">Toutes</option>
+            <option value="on_time">Terminées à l'heure</option>
+            <option value="overrun">Terminées en dépassement</option>
+            <option value="missed">Non exécutées</option>
+            <option value="late_running">En cours — en retard</option>
+            <option value="in_progress">En cours</option>
+            <option value="upcoming">À faire</option>
+          </select>
+        </div>
+        <div class="field search">
+          <label for="h-search">Recherche</label>
+          <input type="text" id="h-search" placeholder="Nom de la tâche">
+        </div>
+      </div>
+    </div>
+
+    <div class="list" id="history-list"></div>
+
+    <footer>
+      <span id="history-count">0 tâche</span>
+      <div class="links">
+        <button class="link" id="history-export-btn" type="button">Exporter cette sélection en CSV</button>
+      </div>
+    </footer>
+  </section>
+
+</div>
+
+<!-- edit modal -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Modifier la tâche</h2>
+      <button type="button" id="modal-close" aria-label="Fermer">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="m-name">Tâche</label>
+        <input type="text" id="m-name">
+      </div>
+      <div class="modal-row">
+        <div class="field">
+          <label for="m-hours">Durée prévue (h)</label>
+          <input type="number" id="m-hours" min="0" max="23">
+        </div>
+        <div class="field">
+          <label for="m-min">Durée prévue (min)</label>
+          <input type="number" id="m-min" min="0" max="59">
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="field">
+          <label for="m-start-date">Date de début</label>
+          <input type="date" id="m-start-date">
+        </div>
+        <div class="field">
+          <label for="m-start-time">Heure de début</label>
+          <input type="time" id="m-start-time">
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="field">
+          <label for="m-end-date">Date de fin</label>
+          <input type="date" id="m-end-date">
+        </div>
+        <div class="field">
+          <label for="m-end-time">Heure de fin</label>
+          <input type="time" id="m-end-time">
+        </div>
+      </div>
+      <div class="field">
+        <label for="m-status">Statut</label>
+        <select id="m-status">
+          <option value="todo">À faire</option>
+          <option value="running">En cours</option>
+          <option value="done">Terminée</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn-ghost" id="modal-cancel">Annuler</button>
+      <button type="button" class="btn-primary" id="modal-save">Enregistrer</button>
+    </div>
+  </div>
+</div>`;
+
+  function buildFullDocument(){
+    var stateJson = JSON.stringify(currentStateSnapshot()).replace(/</g, "\\u003c");
+    return "<!doctype html>\n<html lang=\"fr\">\n<head>\n" +
+      "<meta charset=\"utf-8\">\n" +
+      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" +
+      HEAD_EXTRA_TEMPLATE +
+      "\n</head>\n<body>\n" +
+      BODY_SKELETON_TEMPLATE +
+      "\n<script id=\"" + STATE_EL_ID + "\" type=\"application/json\">" + stateJson + "<" + "/script>\n" +
+      "<script>(" + boot.toString() + ")();<" + "/script>\n" +
+      "</body>\n</html>";
+  }
+
+  function updateSyncBadge(pendingState){
+    var el = document.getElementById("sync-badge");
+    var textEl = document.getElementById("sync-badge-text");
+    if (!el || !textEl) return;
+    el.className = "sync-badge";
+    if (pendingState === "pending"){
+      el.classList.add("pending");
+      textEl.textContent = "Synchronisation…";
+      return;
+    }
+    if (pendingState === "error"){
+      el.classList.add("error");
+      textEl.textContent = "Échec de synchronisation — nouvel essai à la prochaine modification.";
+      return;
+    }
+    if (syncAvailable === true){
+      el.classList.add("synced");
+      textEl.textContent = "Synchronisé sur tous vos appareils";
+    } else if (syncAvailable === false){
+      el.classList.add("local");
+      textEl.textContent = "Enregistré uniquement sur cet appareil";
+    } else {
+      textEl.textContent = "Vérification de la synchronisation…";
+    }
+  }
+
+  function syncPublish(){
+    if (!syncApi){ updateSyncBadge(); return; }
+    updateSyncBadge("pending");
+    syncApi.publish(buildFullDocument()).then(function(){
+      // La vue se recharge normalement automatiquement avec la nouvelle version
+      // publiée ; on remet quand même le badge à jour au cas où ce rechargement tarde.
+      updateSyncBadge();
+    }).catch(function(err){
+      var code = err && err.code;
+      if (code === "conflict") return; // le rechargement automatique va suivre
+      if (code === "not_writer" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed"){
+        syncAvailable = false;
+        syncApi = null;
+        updateSyncBadge();
+        return;
+      }
+      updateSyncBadge("error");
+    });
+  }
+
+  function initSync(){
+    if (!(window.claude && typeof window.claude.use === "function")){
+      syncAvailable = false;
+      updateSyncBadge();
+      return;
+    }
+    window.claude.use("artifact").then(function(ns){
+      syncApi = ns;
+      syncAvailable = !!ns;
+      updateSyncBadge();
+      if (ns){
+        var embedded = readEmbeddedState();
+        var local = readLocalState();
+        var hasUnsyncedLocalTasks = local && local.tasks && local.tasks.length &&
+          (!embedded || mergeTasksById(embedded.tasks, local.tasks).length !== embedded.tasks.length);
+        if (hasUnsyncedLocalTasks) syncPublish();
+      }
+    }).catch(function(){
+      syncAvailable = false;
+      updateSyncBadge();
+    });
+  }
+
   /* ---------- export ---------- */
 
   var downloadsApi = null;
@@ -1098,7 +2015,7 @@
   function flashFooterNote(msg){
     var el = document.getElementById("footer-note");
     if (footerNoteTimer) clearTimeout(footerNoteTimer);
-    var original = "Les données restent dans ce navigateur.";
+    var original = "Astuce : exportez en CSV pour garder une copie hors ligne.";
     el.textContent = msg;
     footerNoteTimer = setTimeout(function(){ el.textContent = original; }, 3500);
   }
@@ -1399,8 +2316,10 @@
   document.getElementById("f-date").value = todayISO();
 
   load();
+  applyRestoredView();
   renderStats();
   renderActiveView();
+  initSync();
   tickClock();
   setInterval(function(){
     tickClock();
@@ -1409,6 +2328,6 @@
       renderActiveView();
     }
   }, 1000);
-
-})();
+}
+boot();
 </script>
